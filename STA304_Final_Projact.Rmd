@@ -1,0 +1,238 @@
+---
+title: "Analysing the affects of Economic on people’s Life Expectancy"
+author: "Tony Chen (1004265298)"
+date: "2020/12/17"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+
+```{r , include=FALSE}
+library(MASS)
+library(car)
+library(tidyverse)
+library(dplyr)
+library(survey)
+library(nlme)
+library(knitr)
+library(ggpubr)
+
+setwd(dir = "C:/Users/Tony/Desktop/Final Report STA304")
+
+dataset <- read.csv("Life Expectancy Data.csv", header = TRUE)
+colnames(dataset)<-c("country", "year", "status", "life_expectancy", "adult_mortality", "infant_deaths", 
+                "alcohol", "percentage_expenditure", "hepatitis_B", "measeles", "bmi", "under_five_deaths", 
+                "polio", "total_expenditure", "diphtheria", "hiv/aids", "gdp", "population", 
+                "thinness_1-19_years", "thinness_5-9_years", "income_composition", "schooling")
+
+# Construct a dataframe only containing data from the desired year
+# Change the year and run all of the code again to analyze data from another year
+df <- subset(dataset, year == 2014)
+
+# Construct a new dataframe with only the variables that we are analyzing
+data_econ <- cbind(df["year"], df["life_expectancy"],
+                   df["percentage_expenditure"], df["total_expenditure"],
+                   df["gdp"], df["income_composition"])
+
+data_select <-cbind(df["year"], df["life_expectancy"],
+                   df["percentage_expenditure"], df["total_expenditure"],
+                   df["gdp"], df["income_composition"], df["status"])
+
+# Exclude the rows containing NA values from the data
+data_select <- na.exclude(data_select)
+data <- na.exclude(data_econ)
+attach(data)
+```
+
+# Abstract
+We are interested about the the affects of economic on people’s life expectancy, so we look at the data set related to life expectancy, health factors for 193 countries has been collected and its corresponding economic data.We used a given set of attributes to build a multiple linear regression model to analyze people's life expectancy. And use the scatter plots to incorporate some causal inference of people's life expectancy. People can use the result to help in suggesting a country which area should be given importance in order to efficiently improve the life expectancy of its population.
+
+# Keywords 
+Keywords: Life Expectancy, gross domestic product (GDP), Income Composition, Developing Country, Developed Country.
+
+# Introduction
+
+By studying history and humanity, anthropologists and evolutionary biologists have found that before the 1800s, humans rarely exceeded the age of 50 (Finch, 2009). However, over time, as the world developed and transitioned from societies of high mortality and fertility to those of low morality and fertility, extending the time that people lived became a desirable goal.
+
+Today, through medical progress, improvements in technologies, emerging economies, and various other socioeconomic factors such as education availability and better living conditions, life expectancy, which is defined as a statistical measure of the average number of years an individual is expected to live, has seen a global rise. Specifically, in 2016, statistics showed that 72 years was the average life expectancy for an infant at birth, (WHO, n.d.).
+
+The purpose of this study is to create a predictive model based on life expectancy data which consists of several socioeconomic predictors that researchers utilized to predict life expectancy among 193 countries between the years of 2000 and 2015. This analysis focuses on how economic factors influence life expectancy and which one is the most significant regarding how it affects life expectancy.
+
+
+
+# Data
+We obtained the data set "Life Expectancy (WHO)" from the KAGGLE website. "The data-set related to life expectancy, health factors for 193 countries has been collected from the same WHO data repository website and its corresponding economic data was collected from United Nation website" (Rajarshi,2017).The target population for this data is all countries in the world, excluding  less known countries like Vanuatu, Tonga, Togo, Cabo Verde etc. Since "finding all data for these countries was difficult and hence, it was decided that we exclude these countries from the final model data-set. "(Rajarshi,2017).
+
+This data set contains 20 predictor variables relating to socioeconomic and health factors, of which we selected four that focus on economic influences. These five selected variables were: gross domestic product (GDP), percentage expenditure, total expenditure, income composition of resources, and status.
+
+Therefore we use life expectancy and those 5 selected variables from the data set to do the analysis(Table 1).Those variables were selected because they contain more valid responses and likely to have relationships with life expectancy.We removed ‘NA’ in those variable since some countries has missing data in those variable, so we want to use this way to remove those countries avoid error. Also We perform this analysis on the data relating to the year 2014 instead of 2015, our original target of analysis, as the data for 2015 had a significant amount of missing data for some of the economic influences we were studying.
+
+'life_expectancy' is a numerical variable,  which measures the average age individuals from a specific country lives for in years. 'percentage_expenditure' is a numerical variable, measures expenditure on health as a percentage of Gross Domestic Product per capital. 'total_expenditure' is a numerical variable, measures general government expenditure on health as a percentage of total government expenditure. 'gdp' is a numerical variable. 'income_composition' is a numerical variable, Human Development Index in terms of income composition of resources (index ranging from 0 to 1). 'status' is a categorical variable, shows the countries is either developed country or developing country.
+
+Here is the table of first six lines of data set: 
+
+## Table 1
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# Create the table of first six lines of data set
+table <- head(data_select)
+kable(table, col.names = gsub("[.]", " ", names(data_select)))
+```
+
+
+
+The following are the plots of the raw data:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 6}
+# Create Boxplot for 5 numerical variable 
+par(mfrow=c(1,3))
+
+boxplot(data$life_expectancy, main='Boxplot for Life Expectancy')
+boxplot(data$gdp, main ='Boxplot for GDP')
+boxplot(data$percentage_expenditure, main ='Boxplot for Percentage Expenditure')
+boxplot(data$total_expenditure	, main = 'Boxplot for Total Expenditure	')
+boxplot(data$income_composition	, main = 'Boxplot for Income Composition	')
+```
+
+According to the ‘Boxplot for the GDP’ and percentage_expenditure, the trend for the distribution of both plot are serious right-skewed. Also life expectancy is our dependent variable which measures the average age individuals from a specific country lives for in years. By according to the ‘Boxplot for the Life Expectancy’,  we examined the normality of this response variable and found that it was relatively normally distributed. Thus, we found no need to transform the life expectancy variable for our models.
+
+The following are the bar plot for only one categorical variable. It is the cumulative frequency graph.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# the cumulative frequency graphs for status 
+ggplot(df,aes(status)) + geom_bar(fill = "grey", colour = "black")
+
+```
+# Model
+
+We continue our analysis by building a multiple linear regression model to predict life expectancy using gross domestic product (GDP), percentage expenditure, total expenditure, and income composition of resources. We choose this model because the predictor life expectancy is numeric and we believe there exists a linear relationship between explanatory variables and life expectancy. All the explanatory variables are numeric, since we don't want to use status to be explanatory variable in our model. the reason is because the definition of developed country is a country has a mature and sophisticated economy, usually measured by gross domestic product (GDP) and/or average income per resident. So we believe that 'status' has high correlation with other variable, and will affect our model's result. 
+
+Using the data selected, we build a linear regression model with the following formula:
+$$
+y_i = \beta_0 + \beta_1 x_{percentage_expenditure,i}+ \beta_2x_{total_expenditure,i}+\beta_3x_{gdp,i}+\beta_4x_{income_composition,i} + \epsilon_i\
+$$
+$\beta_0$ is the coefficient of intercept. Other $\beta$s are the coefficients of corresponding variables. $x_{percentage_expenditure,i}$ represents the percentage of GDP on health, $x_{total_expenditure,i}$ is percentage of total government expenditure on health. $x_{income_composition,i}$ is Human Development Index in terms of income composition of resources, and $x_{gdp,i}$  is country's GDP in 2014. Finally $\epsilon_i$ is the error of our model.
+
+The results of code ran by R is:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# Initial linear model
+model1 <- lm(life_expectancy ~ percentage_expenditure + total_expenditure + 
+              gdp + income_composition)
+summary(model1)
+
+summary(model1)$r.squared
+```
+From the table above, we notice that most p-values of these variables are small, but GDP and percentage_expenditure's p-values are too high. Which means the corresponding coefficients of GDP and percentage_expenditure are not significant, or they has high correlation to each other. And from the last line, R-squared is computed as 0.8270513, representing that 82.71% of variations can be explained by the model. 
+
+Overall, the performance is not too good. Even though our r-squared is high, but GDP and percentage_expenditure's p-values are too high, which means there is evidence to prove that the coefficients of GDP and percentage_expenditure are 0. 
+
+So we create three more model:
+
+### Remove GDP
+$$
+y_i = \beta_0 + \beta_2x_{percentage_expenditure,i}+\beta_3x_{total_expenditure,i}+\beta_4x_{income_composition,i}+ \epsilon_i\
+$$
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# Remove GDP
+model2 <- lm(life_expectancy ~ percentage_expenditure + total_expenditure + income_composition)
+summary(model2)
+
+summary(model2)$r.squared
+```
+
+### Remove percentage expenditure
+$$
+y_i = \beta_0 + \beta_2x_{total_expenditure,i}+\beta_3x_{gdp,i}+\beta_4x_{income_composition,i}+ \epsilon_i\
+$$
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# Remove percentage expenditure
+model3 <- lm(life_expectancy ~ total_expenditure + gdp + income_composition)
+summary(model3)
+
+summary(model3)$r.squared
+```
+### Remove percentage expenditure & GDP
+$$
+y_i = \beta_0 + \beta_2x_{total_expenditure,i}+\beta_4x_{income_composition,i}+ \epsilon_i\
+$$
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# Remove Remove percentage expenditure & GDP
+model4 <- lm(life_expectancy ~ total_expenditure + income_composition)
+summary(model4)
+summary(model4)$r.squared
+```
+
+To decide whether removing these two factors would have negative impacts on the model’s prediction ability, we performed three models that remove either or both of percentage expenditure and GDP. The summary for model held that removing percentage expenditure would not influence the goodness of fit of the model, removing GDP would not influence the goodness of fit of the model and removing both percentage expenditure and GDP would not influence the goodness of fit of the model respectively. which further suggests that removing those two factors would have no significant effect on the model’s prediction ability.
+
+Additionally, we also conducted an AIC analysis on every combination of linear models that could be made for the 4 predictor variables (Table 2). That is, for every possible model that can be generated with a combination of the 4 predictor variables, we found their AIC value and compared their results. With this investigation, we found that the model with the lowest AIC value involved total expenditure and income composition of resources as predictor variables. This means the best model selection based on AIC removed both GDP and percentage expenditure as predictor variables. This coincides with our hypothesis that the best model would remove percentage expenditure and GDP from the initial model which in turn further confirms that removing these two variables would provide an appropriate model.
+
+## Table 2
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# AIC with every model 
+AIC(model1, model2, model3, model4)
+```
+
+# Results
+
+## Table 3
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+group_by(data_select,status)%>% summarise(mean(life_expectancy))
+```
+
+We also use the 'group_by' find out the mean life expectancy for Developed country and Developing country (Table 3). And we find out mean life expectancy for Developed country is 81 years old and Developing country is 69 years old, this meaning that the Developed country usually has higher life expectancy than the Developing country.
+
+## Figure 1
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+ggplot(data_select,aes(x = total_expenditure, y =life_expectancy , color = status))+
+  geom_point()+labs(x = "Total Expenditure", y = "Life Expectancy")
+```
+## Figure 2
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+ggplot(data_select,aes(x = income_composition, y =life_expectancy , color = status))+
+  geom_point()+labs(x = "Income Composition of Resources", y = "Life Expectancy")
+
+```
+
+By examining the scatter plots of the response variable life expectancy against both income composition of resources and total expenditure individually (Figure 1&2), we can see that the income composition plot indicates a linear relationship and the total expenditure plot has a relatively  random spread that is still positively correlated. This suggests linearity in the relations between life expectancy and the final model’s predictor variables. And in Figure 2, we find out all Developed country has high Income Composition of Resources.
+
+## Figure 3 & 4
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height = 4}
+# Scatter plots of each variable vs. life expectancy
+
+ggplot(data_select,aes(x = percentage_expenditure, y =life_expectancy, color = status ))+
+  geom_point()+labs(x = "Percentage Expenditure", y = "Life Expectancy")
+
+ggplot(data_select,aes(x = gdp, y =life_expectancy , color = status))+
+  geom_point()+labs(x = "GDP", y = "Life Expectancy")
+```
+
+More over, when we check the Figure 3 & 4, we can see that there is not strong liner relationship between Life Expectancy and both GDP and Percentage Expenditure. However we also can find out that when GDP and Percentage Expenditure are high, there is not low Life Expectancy.
+
+# Discussion
+## Summary
+Overall, we find out that people in the Developed country will have a higher life expectancy, and the main factor that affect their life expectancy is the income composition of resources for their country. Total expenditure also has a positively correlated with life expectancy, but it is not as strong as income composition of resources shows. For GDP and percentage expenditure, they are also has a small affect to the life expectancy, since when GDP and percentage expenditure are high, there is not low life expectancy. However, it is not necessary to have a  high GDP and percentage expenditure, because there also has high life expectancy in low GDP and percentage expenditure.
+## Conclusions
+Regarding our conclusions, from our study, our model showcases that income composition of resources has a greater influence on life expectancy in comparison to total expenditure. This means that the primary variable which affects life expectancy among the 193 countries based on data from 2014 is income composition of resources, or in other words, how productively a country utilizes its resources. Additionally, our model also indicates that if both predictor variables increase, life expectancy is also expected to increase. That is, if a country spends a higher percentage of their government spending on health and allocates their resources in a manner that improves the human development index, life expectancy is predicted to increase.
+
+Moreover, we can see that there exist a causal inference in this data set, which instrument is the country status, treatment is income composition of resources, and outcome is income composition of resources. From World Population Review website, we know that "most developed countries have an HDI score of 0.8 or above. These countries have stable governments, widespread education, health care, high life expectancy, and growing, powerful economies"(World Population Review). And high HDI meaning it will have a high income composition of resources. Also, high income composition of resources meaning that government spending on health and allocates their resources in a manner that improves the human development index, life expectancy is predicted to increase.
+
+## Weakness & Next Steps
+In general, due to the data set, we can only take into consideration the general economic factors of each country that are present for our model. In addition, the data set contained incomplete data with missing values scattered throughout each variable. This missing data limited our usability of the data set as we initially set to tackle life expectancy data concerning the year 2015, but we were unable to create a sufficient model with over 90% of data missing for one of the economic variables we were interested in. Any missing data we found in the 2014 data was omitted in our model, which in extreme cases, can possibly skew some of our results. The calculated life expectancy might also be biased, since some countries the census might not cover every region of the country. Moreover, in a real world scenario, economic factors are greatly associated with other factors like political, technological, or social influences, which were not included in our model, but could make a significant difference on the life expectancy in cases such as when two countries have similar economic factor readings.
+
+In order to solve our weakness, we will need to doing more survey to get more accurate and diverse economic factors, since there has more economic factors may affect our life expectancy in real life. Moreover, we can also change the topic, which mean we neeed to use not only the economic factors to analysing our life expectancy. We can also use different type of area's factors, in order to understant more about how to let people have more higher life expectancy.
+
+# References
+1.Finch, C. E. (2009). Evolution of the human lifespan and diseases of aging: Roles of infection, inflammation, and nutrition. Proceedings of the National Academy of Sciences of the United States of America (PNAS), 107, 1718-1724. https://doi.org/10.1073/pnas.0909606106
+2.Rajarshi, K. (2017). Life expectancy (WHO): Statistical analysis on factors influencing life expectancy [Data set]. Retrieved from https://www.kaggle.com/kumarajarshi/life-expectancy-who
+3.World Health Organization (n.d.). Global Health Observatory (GHO) data: Life expectancy. Retrieved from https://www.who.int/gho/mortality_burden_disease/life_tables/situation_trends/en/
+4.World Population Review. Human Development Index (HDI) by Country 2020. Retrieved from https://worldpopulationreview.com/country-rankings/hdi-by-country
+
+## Appendix
+
+The link of repository: https://github.com/tonychen1999/STA304-Final-Project-Tony-Chen-.git
+
+
+
